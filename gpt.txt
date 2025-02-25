@@ -1,0 +1,5 @@
+- give me react moduls for charts:   Here are some popular React charting libraries you can use for creating interactive and customizable charts in your React applications:
+
+- explain datagen.js
+
+- write a flask server that consumes high rate data such as datagen.js
