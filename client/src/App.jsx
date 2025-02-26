@@ -1,17 +1,12 @@
-// src/App.jsx
 import React, { useEffect, useState, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 
 const App = () => {
-  // data will hold the incoming array of arrays from the WebSocket
-  const [data, setData] = useState(null);
-  // Toggle between displaying every sample (false) or per second (true)
+  const [data, setData] = useState([]);
   const [displayPerSecond, setDisplayPerSecond] = useState(false);
-  // State to track which channels are selected (default: all true for 10 channels)
-  const [selectedChannels, setSelectedChannels] = useState(
-    new Array(10).fill(true)
-  );
-
+  const [selectedChannels, setSelectedChannels] = useState(new Array(10).fill(true));
+  const colors = ["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#ff00ff"]
+  
   useEffect(() => {
     const ws = new WebSocket("ws://127.0.0.1:8080/ws");
 
@@ -21,8 +16,17 @@ const App = () => {
 
     ws.onmessage = (event) => {
       try {
-        const parsedData = JSON.parse(event.data);
-        setData(parsedData);
+        const message = JSON.parse(event.data);
+        if (message.type === "sync") {
+          // Replace the current data with the full buffer from the server.
+          setData(message.data);
+        } else if (message.type === "append") {
+          // Append the new sample and cap the state to 3000 items.
+          setData(prevData => {
+            const updated = [...prevData, message.data];
+            return updated.length > 3000 ? updated.slice(updated.length - 3000) : updated;
+          });
+        }
       } catch (error) {
         console.error("Error parsing message data:", error);
       }
@@ -41,16 +45,11 @@ const App = () => {
     };
   }, []);
 
-  // Define colors for each of the 10 channels
-  const lineColors = [
-    "#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#ff0000",
-    "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#ff00ff"
-  ];
-
-  // Transform data into a chart-friendly format
+  // Transform data for the chart.
   const chartData = useMemo(() => {
-    if (!data) return [];
+    if (!data || data.length === 0) return [];
     if (!displayPerSecond) {
+      // for desplaying per second, add every sample to the chart
       return data.map((sample, index) => {
         const obj = { x: index };
         sample.forEach((value, j) => {
@@ -59,12 +58,12 @@ const App = () => {
         return obj;
       });
     } else {
-      // In per-second mode, select one sample per second (assuming 100 samples per second)
+      // for displaying per second, take 1 sample every 100 samples. TD: make it work smouthly
       const groupSize = 100;
       const result = [];
       for (let i = 0; i < data.length; i += groupSize) {
         const sample = data[i];
-        const obj = { x: i / groupSize }; // x represents seconds.
+        const obj = { x: i / groupSize };
         sample.forEach((value, j) => {
           obj[`channel${j}`] = value;
         });
@@ -74,7 +73,6 @@ const App = () => {
     }
   }, [data, displayPerSecond]);
 
-  // Handler for toggling channel selection
   const handleChannelToggle = (index) => {
     setSelectedChannels((prev) => {
       const newChannels = [...prev];
@@ -85,21 +83,21 @@ const App = () => {
 
   return (
     <div>
-      <h1>Real Time Chart</h1>
-      {data ? <p>Data length: {data.length}</p> : <p>No data</p>}
+      <h1 style={{display: "flex", justifyContent:"center"}}>Real Time Chart</h1>
+      {data.length ? <p>Data length: {data.length}</p> : <p>No data</p>}
       
       <button onClick={() => setDisplayPerSecond(prev => !prev)}>
         {displayPerSecond ? "Switch to m/s display" : "Switch to per-second display"}
       </button>
 
-      {/* Render channel selection checkboxes */}
-      <div style={{ marginTop: "1rem", marginBottom: "1rem" }}>
-        {lineColors.map((color, i) => (
-          <label key={i} style={{ marginRight: "1rem" }}>
+      <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+        {colors.map((color, i) => (
+          <label key={i} style={{ marginRight: "1rem", marginBottom: "0.5rem", display: "flex", alignItems: "center" }}>
             <input
               type="checkbox"
               checked={selectedChannels[i]}
               onChange={() => handleChannelToggle(i)}
+              style={{ marginRight: "0.5rem" }}
             />
             <span style={{ color: color, marginLeft: "0.25rem" }}>
               Channel {i}
@@ -111,33 +109,30 @@ const App = () => {
       {chartData.length > 0 && (
         <LineChart
           width={2400}
-          height={1000}
+          height={950}
           data={chartData}
-          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+          margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="x"
             label={{
-              value: displayPerSecond ? "Time (s)" : "Sample Index",
+              value: displayPerSecond ? "Time (s)" : "Time (m/s)",
               position: "insideBottomRight",
-              offset: -20
+              offset: -10
             }}
           />
           <YAxis label={{ value: "Value", angle: -90, position: "insideLeft" }} />
-          {/* Render a separate line for each channel if it is selected */}
-          {lineColors.map((color, i) => {
-            return (
-              selectedChannels[i] && (
-                <Line
-                  key={i}
-                  dataKey={`channel${i}`}
-                  stroke={color}
-                  dot={false}
-                />
-              )
-            );
-          })}
+          {colors.map((color, i) => (
+            selectedChannels[i] && (
+              <Line
+                key={i}
+                dataKey={`channel${i}`}
+                stroke={color}
+                dot={false}
+              />
+            )
+          ))}
         </LineChart>
       )}
     </div>
