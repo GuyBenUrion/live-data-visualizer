@@ -18,7 +18,7 @@ async def tcp_data_consumer(host, port):
 
             # Decode sample from websocket and append it to the data buffer
             sample = json.loads(line.decode().strip())
-            data_buffer.append(sample)
+            data_buffer.appendleft(sample)
 
             # Prepare a message with type 'append' containing only the new sample
             message = {"type": "append", "data": sample}
@@ -41,7 +41,7 @@ async def tcp_data_consumer(host, port):
 async def websocket_handler(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-    
+    print("WebSocket connection established")
     # Add the client to the global set
     connected_websockets.add(ws)
     
@@ -59,7 +59,7 @@ async def websocket_handler(request):
     finally:
         connected_websockets.remove(ws)
         await ws.close()
-        print("WebSocket closed")
+        print("WebSocket connection closed")
     return ws
 
 app = web.Application()
