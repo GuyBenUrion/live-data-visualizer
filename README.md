@@ -1,66 +1,53 @@
 # **Real-Time Data Visualization Dashboard**
 
 ## **Overview**  
-This project is a take-home assignment where you will build a real-time web-based application that visualizes streaming data. The application will consist of:
+This project implements a real-time data visualization dashboard that streams and displays incoming data from a TCP server. The system is designed to handle high-frequency data (100 samples per second, each with 10 values) and visualize it using a live-updating chart. 
 
-- **A backend server** that receives floating-point data from a TCP stream at **100 samples/sec** (each sample has 10 values, one per channel).
-- **A frontend client** that renders this data live on a line chart, displaying the last 30 seconds of data.
+## **Architecture & Components**
+1. Data Generator
+- (datagen.js - Node.js TCP Server): A simple TCP server generates random data samples every 10ms (100 samples/sec) and sends them to connected clients.
 
-Your task is to design and implement a working solution, making decisions around data handling, communication between the client and server, and frontend state management.
+2. Backend (Python, Aiohttp, WebSockets)
+- Listens for incoming TCP data and stores it in a deque buffer (30 seconds of data).
+- Supports WebSocket connections to stream data to the frontend.
+- Offers an endpoint to control the broadcast interval of data updates.
 
-*We do not ask you to invest more than **4 hours** in this project. Focus on delivering value, and clearly label the code where you would have done things differently if you had a week to complete the task.*
+3. Frontend (React, Recharts)
+- Displays 10 real-time data channels on a live line chart.
+- Offers a toggle to switch between raw data and a moving average chart.
+- Allows users to set the broadcast at different rates.
 
-It's OK to use AI - see [below](#generative-ai).
-
-### **If you have extra time (Optional Enhancements)**  
-If time permits, add a **second chart** that displays a **moving average over the past 1 second (100 samples)** for each channel.
-
----
-
-## **Requirements**  
-
-### Backend
-- The backend should receive the incoming data stream.
-- It should provide a way for the frontend to access this real-time data efficiently.
-- The backend can be implemented in the language you know best. At brain.space we use Python (w/FastAPI), but you can implement with any technology.
-
-### Frontend
-- The frontend should display 10 real-time lines on a single chart, with:  
-  - **X-axis:** Time  
-  - **Y-axis:** Value (one line per channel, 0-9)  
-- The chart should update continuously as new data arrives, showing only the **last 30 seconds** of data.
-- The frontend should retrieve and manage data from the backend in a performant way.
-- The dashboard should ideally be implemented with **React**.
-
-### **Extra Credit (Optional)**  
-- Add a **second chart** that displays a **1-second moving average** for each channel.
-- Decide where and how to compute the moving average while keeping performance optimal.
-- Add any other cool features you think might be nice, either fully implementing them or adding a placeholder and comments.
-
-### <a name="generative-ai"></a>Generative AI
-
-You can use generative AI to help you with the project, but if so, **please share the relevant chats** with a public link or screenshot/download.
+4. Docker & Deployment
+- The system is containerized using Docker and managed with Docker Compose.
 
 ---
 
-## **Setup Instructions**  
+## **Challenges & Trade-offs & **
+1. Moving Average Compute
+- Computing the moving average on the frontend was quicker and easier using React's useMemo, and since the load isn't too heavy, the frontend can handle it for now. However, for better scalability in the future, moving this logic to the backend would be a cleaner solution to reduce client-side processing.
 
-### For and Clone the Repository**  
-Fork this repository and clone it to your local machine:
+2.  Server Client Management
+- Currently, the server handles all clients uniformly, broadcasting the same data to everyone. For better scalability, the system should manage clients individually, allowing dynamic task assignment per client. This would enable more efficient resource allocation and personalized data streams based on client-specific needs.
+
+3. Dynamic Sampling Rate Handling
+- Currently, the system processes a fixed sample rate of 100 samples per second. To improve flexibility, a dynamic rate monitor should be implemented to handle varying sample rates. This would allow the system to adapt to different data sources, ensuring smooth processing and visualization without performance bottlenecks.
+
+---
+
+## **Setup & Running The Project**  
+
+1. Clone repo to your local machine:
 ```sh
-$ git clone https://github.com/YOUR_USERNAME/takehome-fullstack-fe.git
-$ cd takehome-fullstack-fe
+$ git clone https://github.com/GuyBenUrion/live-data-visualizer.git
+$ cd live-data-visualizer
 ```
 
-### Run the mock data generator
+2. Run the project with Docker Compose
 ```sh
-node datagen.js
+$ docker-compose up --build
 ```
 
-You can test the datagen server by running:
-```sh
-telnet localhost 9000
-```
+3. Open web server on http://localhost:5173/ or http://172.19.0.4:5173/
 
 ---
 
