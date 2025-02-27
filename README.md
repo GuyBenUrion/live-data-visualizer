@@ -50,3 +50,6 @@ $ docker-compose up --build
 3. Open web server on http://localhost:5173/ or http://172.19.0.4:5173/
 
 ---
+
+## Generative AI
+https://github.com/GuyBenUrion/live-data-visualizer/blob/master/datagen/README.md
