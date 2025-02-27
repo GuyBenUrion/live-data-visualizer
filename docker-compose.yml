@@ -1,0 +1,35 @@
+version: "3"
+services:
+  
+  datagen:
+    build:
+      context: ./datagen
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"  # TCP server
+    container_name: datagen
+    restart: unless-stopped
+
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"  # aiohttp server
+    container_name: server
+    restart: unless-stopped
+
+    depends_on:
+      - datagen
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"  # front-end server
+    container_name: client
+    restart: unless-stopped
+    depends_on:
+      - server

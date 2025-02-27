@@ -1,20 +1,23 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
+
+// TD: Change group size, data buffer, channels number dynamically
+const GROUP_SIZE = 100;
+const DATA_BUFFER_SIZE = 3000
+const CHANNELS_NUMBER = 10;
+const URL =`0.0.0.0:8080`
+const WS_URL =`ws://${URL}`
+const HTTP_URL =`http://${URL}`
+const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#ff00ff"];
 
 const App = () => {
-  const [data, setData] = useState([]);
-  // Toggles between raw and per-second modes.
-  const [displayPerSecond, setDisplayPerSecond] = useState(false);
-  // New state to toggle between normal graph and moving average graph.
+  const [samples, setSamples] = useState([]);
+  const [progressValue, setProgressValue] = useState(0);
   const [displayAverage, setDisplayAverage] = useState(false);
-  const [selectedChannels, setSelectedChannels] = useState(new Array(10).fill(true));
-  const colors = [
-    "#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#ff0000",
-    "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#ff00ff"
-  ];
+  const [selectedChannels, setSelectedChannels] = useState(new Array(CHANNELS_NUMBER).fill(true));
 
   useEffect(() => {
-    const ws = new WebSocket("ws://127.0.0.1:8080/ws");
+  const ws = new WebSocket(`${WS_URL}/ws`);
 
     ws.onopen = () => {
       console.log("WebSocket connected");
@@ -23,16 +26,20 @@ const App = () => {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === "sync") {
-          // Replace the current data with the full buffer from the server.
-          setData(message.data);
-        } else if (message.type === "append") {
-          // Append the new sample and cap the state to 3000 items.
-          setData(prevData => {
-            const updated = [message.data, ...prevData];
-            return updated.length > 3000 ? updated.slice(0, 3000) : updated;
-          });
-        }
+
+        switch (message.type) {
+          case "sync":
+            setSamples(message.data);
+            break;
+          case "append":
+            setSamples(prevData => {
+              const updated = [message.data, ...prevData];
+              return updated.length > DATA_BUFFER_SIZE ? updated.slice(0, DATA_BUFFER_SIZE) : updated;
+            });
+            break;
+          default:
+            console.error("Unknown message type:", message.type);
+          }
       } catch (error) {
         console.error("Error parsing message data:", error);
       }
@@ -51,62 +58,42 @@ const App = () => {
     };
   }, []);
 
-  // Compute the chart data based on the current display mode.
-  const chartData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-
-    // If moving average mode is active, calculate a 1-second moving average.
-    if (displayAverage) {
-      const groupSize = 100; // 100 samples per second
+  const calculateMovingAverage = data => { 
       const result = [];
-      for (let i = 0; i < data.length; i++) {
-        // Determine the window of samples to average.
-        const windowStart = Math.max(0, i - groupSize + 1);
-        const windowSamples = data.slice(windowStart, i + 1);
+      for (let i = GROUP_SIZE; i < data.length; i++) {
+        const windowSamples = data.slice(Math.max(0, i - GROUP_SIZE + 1), i + 1);
 
-        // Calculate the sum for each channel.
         const sums = new Array(10).fill(0);
         windowSamples.forEach(sample => {
           sample.forEach((value, j) => {
             sums[j] += value;
           });
         });
-        // Calculate the average for each channel.
-        const averages = sums.map(sum => sum / windowSamples.length);
 
-        const obj = { x: i }; // You can convert this index to seconds if desired.
+        const averages = sums.map(sum => sum / windowSamples.length);
+        const obj = { x: i };
         averages.forEach((avg, j) => {
           obj[`channel${j}`] = avg;
         });
         result.push(obj);
       }
-      return result.slice(100);
-    }
-    // Normal modes: either display every sample or one sample per second.
-    else if (!displayPerSecond) {
-      // "Raw" mode: display every sample.
-      return data.map((sample, index) => {
-        const obj = { x: index };
-        sample.forEach((value, j) => {
-          obj[`channel${j}`] = value;
-        });
-        return obj;
-      });
-    } else {
-      // "Per-second" mode: take one sample every 100 samples.
-      const groupSize = 100;
-      const result = [];
-      for (let i = 0; i < data.length; i += groupSize) {
-        const sample = data[i];
-        const obj = { x: i / groupSize };
-        sample.forEach((value, j) => {
-          obj[`channel${j}`] = value;
-        });
-        result.push(obj);
-      }
       return result;
     }
-  }, [data, displayPerSecond, displayAverage]);
+
+  const formatDataForVisualization = data => data.map((sample, index) => {
+    const obj = { x: index };
+    sample.forEach((value, j) => {
+      obj[`channel${j}`] = value;
+    });
+    return obj;
+  })
+
+  // Compute the chart data based on the current display mode.
+  const chartData = useMemo(() => {
+    if (!samples || samples.length === 0) return [];
+    return displayAverage ? calculateMovingAverage(samples) : formatDataForVisualization(samples);
+
+  }, [samples, displayAverage]);
 
   const handleChannelToggle = (index) => {
     setSelectedChannels(prev => {
@@ -116,23 +103,68 @@ const App = () => {
     });
   };
 
+  const sendBroadcastInterval = async () => {
+    try {
+      const response = await fetch(`${HTTP_URL}/broadcast_interval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interval: progressValue })
+      });
+      const data = await response.json();
+      console.log("Broadcast interval updated:", data.broadcast_interval);
+    } catch (error) {
+      console.error("Error sending broadcast interval:", error);
+    }
+  };
+
   return (
     <div>
       <h1 style={{ display: "flex", justifyContent: "center" }}>Real Time Chart</h1>
-      {data.length ? <p>Data length: {data.length}</p> : <p>No data</p>}
-      
-      {/* Button to toggle raw vs. per-second display */}
-      <button onClick={() => setDisplayPerSecond(prev => !prev)}>
-        {displayPerSecond ? "Switch to m/s display" : "Switch to per-second display"}
-      </button>
-      
-      {/* New button to toggle moving average mode */}
-      <button onClick={() => setDisplayAverage(prev => !prev)} style={{ marginLeft: "1rem" }}>
-        {displayAverage ? "Switch to Normal Graph" : "Switch to Moving Average Graph"}
-      </button>
+      <div
+        style={{
+          marginTop: "1rem",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "1rem"
+        }}
+      >
+  <button
+    onClick={() => setDisplayAverage(prev => !prev)}
+    style={{ padding: "0.5rem 1rem",  cursor: "pointer", fontSize: "1rem" }}
+  >
+    {displayAverage ? "Switch to Normal Graph" : "Switch to Moving Average Graph"}
+  </button>
+
+  <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+    <label htmlFor="progressBar" style={{ fontWeight: "bold" }}>
+      Set Broadcast Interval Timeout (m/s):
+    </label>
+    <input
+      id="progressBar"
+      type="range"
+      min="0"
+      max="500"
+      value={progressValue}
+      onChange={(e) => setProgressValue(Number(e.target.value))}
+      style={{ marginRight: "0.5rem" }}
+    />
+    <span>{progressValue}</span>
+    <button
+      onClick={sendBroadcastInterval}
+      style={{
+        padding: "0.5rem 1rem",
+        cursor: "pointer",
+        fontSize: "1rem"
+      }}
+    >
+      Set Timeout
+    </button>
+  </div>
+</div>
 
       <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
-        {colors.map((color, i) => (
+        {COLORS.map((color, i) => (
           <label key={i} style={{ marginRight: "1rem", marginBottom: "0.5rem", display: "flex", alignItems: "center" }}>
             <input
               type="checkbox"
@@ -145,7 +177,7 @@ const App = () => {
         ))}
       </div>
 
-      {chartData.length > 0 && (
+      {chartData.length > 0 ? (
         <LineChart
           width={2400}
           height={950}
@@ -154,31 +186,37 @@ const App = () => {
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
-            domain={[0, chartData.length]}
+            domain={[0, 30]}
             dataKey="x"
             label={{
               value: displayAverage
-                ? "Time (s) - Moving Average"
-                : displayPerSecond
-                  ? "Time (s)"
-                  : "Time (m/s)",
+                ? "Time (m/s) - Moving Average"
+                : "Time (m/s)",
               position: "insideBottomRight",
               offset: -10
             }}
           />
-          <YAxis label={{ value: "Value", angle: -90, position: "insideLeft" }} domain={[0, 20]} />
-          {colors.map((color, i) => (
+          <YAxis
+            label={{ value: "Value", angle: -90, position: "insideLeft" }}
+            domain={[0, 20]}
+          />
+          {COLORS.map((color, i) => (
             selectedChannels[i] && (
               <Line
                 key={i}
                 dataKey={`channel${i}`}
                 stroke={color}
+                // Disable animations to prevent bouncing:
+                isAnimationActive={false}
+                // Use a smooth curve:
+                type="monotone"
                 dot={false}
               />
             )
           ))}
         </LineChart>
-      )}
+
+      ): null}
     </div>
   );
 };
