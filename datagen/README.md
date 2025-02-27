@@ -39,3 +39,9 @@ During the development of this project, I used AI assistance for various tasks, 
 - After everything was functional, I started thinking about further improvements.
 
 - I introduced a broadcast rate controller, allowing dynamic adjustments to the frequency of updates for better performance.
+
+---
+
+## AI and Online Resources in My Learning Process
+
+AI assistance and online research played a significant role in my learning and self development throughout this project. They helped me explore best practices, compare different approaches, and accelerate implementation. However, every decision was made based on careful consideration of project requirements, balancing efficiency, scalability, and maintainability.
