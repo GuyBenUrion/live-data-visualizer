@@ -2,7 +2,7 @@
 
 ## Why I Am Not Sharing AI Chats
 
-During the development of this project, I used AI assistance for various tasks, but I am not providing chat logs or screenshots due to the sheer volume of content and the variety of unrelated discussions within those interactions. Instead, I will summarize how AI influenced my development process and the thought process behind each decision.
+During the development of this project, I used AI assistance for various tasks, but I am not providing chat logs or screenshots due to the sheer volume of content and the variety of unrelated discussions within those interactions. Instead, I will outline my development process, highlighting the decisions I made.
 
 ## My Development Approach
 
